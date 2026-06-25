@@ -4,10 +4,6 @@ const notificationService = require('../services/notificationService');
 const { sortByPriority, getTopPriority } = require('../utils/priorityHelper');
 const { Log } = require('../../logging-middleware');
 
-/**
- * GET /api/notifications/unread/count
- * Get count of unread notifications (must be before /:id route)
- */
 router.get('/unread/count', async (req, res) => {
   try {
     await Log('backend', 'info', 'route', 'GET /api/notifications/unread/count request received');
@@ -36,20 +32,13 @@ router.get('/unread/count', async (req, res) => {
   }
 });
 
-/**
- * GET /api/notifications/priority
- * Fetch top priority notifications
- */
 router.get('/priority', async (req, res) => {
   try {
     await Log('backend', 'info', 'route', 'GET /api/notifications/priority request received');
     
     const { limit = 10 } = req.query;
     
-    // Fetch all notifications
     const notifications = await notificationService.fetchNotifications();
-    
-    // Get top priority notifications
     const topNotifications = getTopPriority(notifications, parseInt(limit));
 
     await Log('backend', 'info', 'route', `Returning top ${topNotifications.length} priority notifications`);
@@ -72,19 +61,12 @@ router.get('/priority', async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/notifications/read-all
- * Mark all notifications as read
- */
 router.patch('/read-all', async (req, res) => {
   try {
     await Log('backend', 'info', 'route', 'PATCH /api/notifications/read-all request received');
     
     const notifications = await notificationService.fetchNotifications();
     const unreadNotifications = notifications.filter(n => !n.isRead);
-    
-    // In a real app, this would update the database
-    // For this implementation, we just simulate the response
     const updatedCount = unreadNotifications.length;
 
     await Log('backend', 'info', 'route', `Marked ${updatedCount} notifications as read`);
@@ -110,17 +92,12 @@ router.patch('/read-all', async (req, res) => {
   }
 });
 
-/**
- * GET /api/notifications
- * Fetch paginated notifications with optional filtering
- */
 router.get('/', async (req, res) => {
   try {
     await Log('backend', 'info', 'route', 'GET /api/notifications request received');
     
     const { page = 1, limit = 10, notification_type } = req.query;
     
-    // Validate query parameters
     if (notification_type && !['Placement', 'Result', 'Event'].includes(notification_type)) {
       await Log('backend', 'warn', 'route', `Invalid notification_type: ${notification_type}`);
       return res.status(400).json({
@@ -132,22 +109,18 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Fetch notifications from AffordMed API
     let notifications = await notificationService.fetchNotifications({
       notification_type
     });
 
-    // Sort by timestamp (newest first)
     notifications = notifications.sort((a, b) => 
       new Date(b.Timestamp) - new Date(a.Timestamp)
     );
 
-    // Filter by type if specified
     if (notification_type) {
       notifications = notificationService.filterByType(notifications, notification_type);
     }
 
-    // Paginate results
     const result = notificationService.paginate(
       notifications,
       parseInt(page),
@@ -174,17 +147,12 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * POST /api/notifications
- * Create a new notification
- */
 router.post('/', async (req, res) => {
   try {
     await Log('backend', 'info', 'route', 'POST /api/notifications request received');
     
     const { type, message, priority } = req.body;
     
-    // Validate required fields
     if (!type || !message) {
       await Log('backend', 'warn', 'route', 'Missing required fields in POST request');
       return res.status(400).json({
@@ -196,7 +164,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Validate type
     if (!['Placement', 'Result', 'Event'].includes(type)) {
       return res.status(400).json({
         success: false,
@@ -207,7 +174,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Create notification object (simulated - no real DB)
     const newNotification = {
       ID: `notif_${Date.now()}`,
       Type: type,
@@ -237,10 +203,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * GET /api/notifications/:id
- * Get a single notification by ID
- */
 router.get('/:id', async (req, res) => {
   try {
     await Log('backend', 'info', 'route', `GET /api/notifications/${req.params.id} request received`);
@@ -279,10 +241,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/notifications/:id/read
- * Mark a notification as read
- */
 router.patch('/:id/read', async (req, res) => {
   try {
     await Log('backend', 'info', 'route', `PATCH /api/notifications/${req.params.id}/read request received`);
@@ -301,7 +259,6 @@ router.patch('/:id/read', async (req, res) => {
       });
     }
 
-    // Simulate marking as read
     const updatedNotification = {
       id: notification.ID,
       isRead: true,

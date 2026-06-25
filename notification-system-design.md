@@ -1,23 +1,20 @@
 # Notification System Design
 
-## Stage 1
+## Stage 1: REST API Design
 
-### REST API Endpoints
+### API Endpoints
 
-**Base URL:** `http://localhost:5000/api`
+Base URL: http://localhost:5000/api
 
-**Authentication:** All routes need Bearer token in headers
-```
-Authorization: Bearer <token>
-```
+Auth: Bearer token required for all endpoints
 
-#### GET /notifications
-Get paginated list of notifications
+### GET /notifications
+Fetch notifications with pagination
 
 Query params:
-- `page` (default: 1)
-- `limit` (default: 10) 
-- `notification_type` (Placement, Result, Event)
+- page (default 1)
+- limit (default 10) 
+- notification_type (optional: Placement/Result/Event)
 
 Response:
 ```json
@@ -43,21 +40,16 @@ Response:
 }
 ```
 
-#### GET /notifications/priority
-Get top N priority notifications
+### GET /notifications/priority
+Returns top priority notifications sorted by type then timestamp
 
-Query params:
-- `limit` (default: 10)
+Query: limit (default 10)
 
-Returns sorted array: Placement > Result > Event, newest first
+### GET /notifications/:id
+Fetch single notification by ID
 
-#### GET /notifications/:id
-Get single notification
-
-Response: notification object or 404
-
-#### POST /notifications
-Create notification
+### POST /notifications
+Create new notification
 
 Body:
 ```json
@@ -68,18 +60,14 @@ Body:
 }
 ```
 
-#### PATCH /notifications/:id/read
-Mark notification as read
+### PATCH /notifications/:id/read
+Mark single notification as read
 
-Returns updated notification with readAt timestamp
+### PATCH /notifications/read-all
+Mark all notifications as read
 
-#### PATCH /notifications/read-all
-Mark all as read
-
-Returns count of updated notifications
-
-#### GET /notifications/unread/count
-Get unread count by type
+### GET /notifications/unread/count
+Get count of unread notifications grouped by type
 
 Response:
 ```json
@@ -93,24 +81,24 @@ Response:
 }
 ```
 
-**Error Codes:**
-- 400: Bad Request (invalid params)
-- 401: Unauthorized
-- 404: Not Found
-- 500: Server Error
-- 503: Service Unavailable
+Error responses:
+- 400 Bad Request
+- 401 Unauthorized  
+- 404 Not Found
+- 500 Internal Error
+- 503 Service Unavailable
 
 ---
 
-## Stage 2
+## Stage 2: Database Design
 
-### Database Choice: MongoDB
+### DB Choice: MongoDB
 
-**Why MongoDB?**
-- Flexible schema for different notification types
-- Fast reads with proper indexing
-- Easy horizontal scaling
-- JSON-like documents match API responses well
+Why MongoDB:
+- flexible schema
+- fast with indexes
+- scales horizontally
+- document format matches our JSON responses
 
 ### Collections
 
@@ -146,42 +134,33 @@ Response:
 ### Indexes
 
 ```javascript
-// For fetching unread notifications
 db.notifications.createIndex({ studentId: 1, isRead: 1, timestamp: -1 })
-
-// For filtering by type
 db.notifications.createIndex({ studentId: 1, type: 1, timestamp: -1 })
-
-// For priority lookups
 db.notifications.createIndex({ studentId: 1, priority: 1, timestamp: -1 })
-
-// Unique constraint
 db.notifications.createIndex({ notificationId: 1 }, { unique: true })
-
-// Auto-delete old notifications (90 days)
 db.notifications.createIndex({ createdAt: 1 }, { expireAfterSeconds: 7776000 })
 ```
 
-### Scaling
+### Scaling approach
 
-**Read Scaling:**
-- MongoDB read replicas
-- Redis cache layer
-- CDN for static assets
+Read scaling:
+- read replicas
+- Redis cache
+- CDN for frontend assets
 
-**Write Scaling:**
-- Shard by studentId
-- Batch inserts
+Write scaling:
+- shard by studentId
+- batch inserts for bulk operations
 
-**Data Management:**
-- TTL indexes for auto-cleanup
-- Archive old data to cold storage
+Data management:
+- TTL index auto-deletes old notifications (90 days)
+- archive to S3 or similar for historical data
 
 ---
 
-## Stage 3
+## Stage 3: Query Optimization
 
-### Given Query
+### Original query
 
 ```sql
 SELECT * FROM notifications 
@@ -189,14 +168,14 @@ WHERE studentID=1042 AND isRead=false
 ORDER BY createdAt;
 ```
 
-### Problems
+### Issues
 
-1. **SELECT *** - fetches all columns even if not needed
-2. **No LIMIT** - returns all rows, could be thousands
-3. **Slow sorting** - ORDER BY without proper index does filesort
-4. **No pagination** - loads everything into memory
+1. SELECT * fetches unnecessary columns
+2. No LIMIT means could return thousands of rows
+3. ORDER BY without index is slow
+4. No pagination
 
-### Optimized Query
+### Better query
 
 ```sql
 SELECT notificationId, type, message, timestamp, priority 
@@ -206,13 +185,13 @@ ORDER BY createdAt DESC
 LIMIT 20 OFFSET 0;
 ```
 
-**Required Index:**
+Need this index:
 ```sql
 CREATE INDEX idx_student_read_created 
 ON notifications(studentID, isRead, createdAt DESC);
 ```
 
-This covers WHERE and ORDER BY in one index - much faster.
+This index covers both WHERE clause and ORDER BY.
 
 ### Query 2: Students with placement notifications in last 7 days
 
@@ -227,7 +206,7 @@ GROUP BY s.studentID, s.name, s.email
 ORDER BY notif_count DESC;
 ```
 
-**Index needed:**
+Index:
 ```sql
 CREATE INDEX idx_type_created 
 ON notifications(type, createdAt DESC, studentID);
@@ -235,32 +214,27 @@ ON notifications(type, createdAt DESC, studentID);
 
 ---
 
-## Stage 4
+## Stage 4: Performance
 
 ### Problem
 
-Every page load queries database directly → slow and expensive
+Every page load hits the database - this is slow and expensive at scale.
 
 ### Solutions
 
-**1. Redis Caching**
+1. Redis caching
 
-Cache hot data with TTL:
-- User notifications: 5 min TTL
-- Unread count: 2 min TTL
-- Priority list: 10 min TTL
+Cache with TTL:
+- notifications: 5min
+- unread counts: 2min  
+- priority list: 10min
 
-Flow:
-```
-Request → Check Redis → HIT: return cached data
-                     → MISS: query DB, cache result, return
-```
+Flow: check cache first, on miss query DB and cache result
 
-Invalidate cache on writes (mark as read, new notification)
+Invalidate on writes
 
-**2. Cursor-based Pagination**
+2. Cursor pagination instead of offset
 
-Instead of OFFSET (slow for large offsets):
 ```sql
 SELECT * FROM notifications
 WHERE studentId = 1042 
@@ -269,34 +243,30 @@ ORDER BY createdAt DESC, notificationId DESC
 LIMIT 20;
 ```
 
-Constant time O(1) for any page vs O(n) for offset
+This is O(1) for any page, offset pagination is O(n)
 
-**3. Frontend Optimization**
+3. Frontend
 
-- Lazy load notifications on scroll
-- Virtual scrolling (render only visible items)
-- Service worker caching
-- Debounce filter changes
+- lazy loading
+- virtual scroll for long lists
+- service worker cache
+- debounce filters
 
-**4. Database**
+4. Database
 
-- Connection pooling
-- Query result streaming
-- Read replicas
+- connection pooling
+- read replicas for GET requests
 
-**Performance Gains:**
-
-| Metric | Before | After |
-|--------|--------|-------|
-| First Load | 2.8s | 0.4s |
-| Cached Load | 1.2s | 50ms |
-| DB Queries/sec | 450 | 50 |
+Results:
+- First load: 2.8s → 0.4s
+- Cached: 1.2s → 50ms  
+- DB load: 450 → 50 queries/sec
 
 ---
 
-## Stage 5
+## Stage 5: Notification Sending
 
-### Current Problem
+### Current approach (bad)
 
 ```javascript
 for (const student of students) {
@@ -306,14 +276,14 @@ for (const student of students) {
 }
 ```
 
-Issues:
-- One failure breaks everything
-- Sequential processing is slow
-- No retry on temporary failures
+Problems:
+- sequential = slow
+- one failure stops everything  
+- no retries
 
-### Redesigned Solution
+### Better design
 
-**Architecture:**
+Use message queue (Redis or RabbitMQ):
 
 ```
 API Request → Publish to Queue → Return 202 Accepted
@@ -326,10 +296,10 @@ Background Workers (3-5 instances) →
   Max retries failed: Move to Dead Letter Queue
 ```
 
-**Queue Structure (Redis/RabbitMQ):**
+Queue message format:
 
 ```javascript
-Message: {
+{
   id: "notif_123",
   studentId: "STU001",
   type: "Placement",
@@ -338,26 +308,22 @@ Message: {
 }
 ```
 
-**Worker Logic:**
+Worker code:
 
 ```javascript
 async function processNotification(msg) {
   try {
-    // run in parallel
     await Promise.allSettled([
       sendEmail(msg),
       saveToDb(msg),
       sendPush(msg)
     ]);
-    
-    msg.ack(); // success
+    msg.ack();
   } catch (err) {
     if (msg.retryCount < 3) {
-      // retry with exponential backoff: 2s, 4s, 8s
       setTimeout(() => queue.publish(msg), 2 ** msg.retryCount * 1000);
       msg.ack();
     } else {
-      // move to dead letter queue for manual review
       dlq.publish(msg);
       msg.ack();
     }
@@ -365,49 +331,39 @@ async function processNotification(msg) {
 }
 ```
 
-**Benefits:**
-- API responds in <50ms vs 15+ seconds
-- Failures don't block other notifications
-- Automatic retry
-- Process 500+ notifications/minute vs 240/hour
-- Can scale workers based on queue depth
+Benefits:
+- API responds instantly (<50ms)
+- failures don't block other notifications
+- auto retry with exponential backoff
+- can scale workers independently
+- handle 500+ notifs/min
 
 ---
 
-## Stage 6
+## Stage 6: Priority Sorting
 
-### Approach
+### Implementation
 
-Fetch all notifications from AffordMed API, sort in-memory by composite priority score, return top N.
+Fetch from AffordMed API, sort in memory by priority score, return top N
 
-**Priority Calculation:**
+Priority formula:
 
-```
-score = (type_weight × 10^12) - unix_timestamp
+score = (typeWeight * 10^12) - timestamp
 
-Type weights:
-- Placement: 1
-- Result: 2  
-- Event: 3
-
+Type weights: Placement=1, Result=2, Event=3
 Lower score = higher priority
-```
 
-Multiply by 10^12 so type dominates, then subtract timestamp for recency within same type.
+Multiply by large number so type always dominates, then subtract timestamp for newest first within same type.
 
-**Example:**
-```
-Placement today:  1000000000000 - 1719302400000 = ...98... (highest)
-Result today:     2000000000000 - 1719302400000 = ...98...
-Event yesterday:  3000000000000 - 1719216000000 = ...98... (lowest)
-```
+Example:
+- Placement today: 1000000000000 - 1719302400000 (high priority)
+- Result today: 2000000000000 - 1719302400000 
+- Event yesterday: 3000000000000 - 1719216000000 (low priority)
 
-**Implementation:** See `notification-app-be/stage6-priority.js`
+Code is in `notification-app-be/stage6-priority.js`
 
-Run with: `node stage6-priority.js 10`
+Run: `node stage6-priority.js 10`
 
-**Why not use heap/priority queue?**
-For our scale (hundreds of notifications), JavaScript Array.sort() is fast enough (~1-2ms). Network latency (50-200ms) dominates anyway. Heap would add complexity for minimal gain.
+Why not heap? For a few hundred notifications Array.sort is fine (~1-2ms). Network call takes 50-200ms anyway so not worth the complexity.
 
-**Keeping top 10 updated:**
-Since new notifications arrive continuously, we simply re-fetch and re-sort on demand. For production at larger scale, could use min-heap or Redis sorted sets.
+For production at scale would use Redis sorted sets or min heap to maintain top N efficiently.

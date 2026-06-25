@@ -3,7 +3,6 @@ import { NOTIFICATION_TYPES } from '../config';
 
 export default function NotificationFilter({ selectedFilter, onFilterChange }) {
   const handleFilterClick = (type) => {
-    // If clicking the same filter, clear it
     if (selectedFilter === type) {
       onFilterChange(null);
     } else {

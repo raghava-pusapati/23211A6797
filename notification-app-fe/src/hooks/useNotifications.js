@@ -1,11 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchNotifications } from '../api/notifications';
 
-/**
- * Custom hook for fetching and managing notifications
- * @param {Object} initialParams - Initial query parameters
- * @returns {Object} - Notifications data and control functions
- */
 export function useNotifications(initialParams = {}) {
   const [notifications, setNotifications] = useState([]);
   const [pagination, setPagination] = useState(null);

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const axios = require('axios');
 
 const API_URL = 'http://4.224.186.213';
