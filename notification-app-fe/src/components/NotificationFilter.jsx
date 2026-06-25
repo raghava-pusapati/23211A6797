@@ -1,20 +1,43 @@
-import { ToggleButton, ToggleButtonGroup } from "@mui/material";
+import { Box, Chip } from '@mui/material';
+import { NOTIFICATION_TYPES } from '../config';
 
-const filters = ["All", "Placement", "Result", "Event"];
+export default function NotificationFilter({ selectedFilter, onFilterChange }) {
+  const handleFilterClick = (type) => {
+    // If clicking the same filter, clear it
+    if (selectedFilter === type) {
+      onFilterChange(null);
+    } else {
+      onFilterChange(type);
+    }
+  };
 
-export function NotificationFilter({ value, onChange }) {
   return (
-    <ToggleButtonGroup
-      value={value}
-      exclusive
-      size="small"
-      sx={{ flexWrap: "wrap", gap: 0.5 }}
-    >
-      {filters.map((type) => (
-        <ToggleButton value={type} sx={{ textTransform: "none", px: 2 }}>
-          {type}
-        </ToggleButton>
+    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+      {NOTIFICATION_TYPES.map((type) => (
+        <Chip
+          key={type}
+          label={type}
+          onClick={() => handleFilterClick(type)}
+          color={selectedFilter === type ? 'primary' : 'default'}
+          variant={selectedFilter === type ? 'filled' : 'outlined'}
+          sx={{ 
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            '&:hover': {
+              backgroundColor: selectedFilter === type ? 'primary.dark' : 'action.hover'
+            }
+          }}
+        />
       ))}
-    </ToggleButtonGroup>
+      {selectedFilter && (
+        <Chip
+          label="Clear Filter"
+          onClick={() => onFilterChange(null)}
+          color="secondary"
+          variant="outlined"
+          sx={{ cursor: 'pointer' }}
+        />
+      )}
+    </Box>
   );
 }

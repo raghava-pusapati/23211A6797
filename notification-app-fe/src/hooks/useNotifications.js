@@ -1,20 +1,68 @@
-import { useState, useEffect } from "react";
-import { fetchNotifications } from "../apis/notifications";
+import { useState, useEffect, useCallback } from 'react';
+import { fetchNotifications } from '../api/notifications';
 
-export function useNotifications() {
+/**
+ * Custom hook for fetching and managing notifications
+ * @param {Object} initialParams - Initial query parameters
+ * @returns {Object} - Notifications data and control functions
+ */
+export function useNotifications(initialParams = {}) {
   const [notifications, setNotifications] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [params, setParams] = useState({
+    page: 1,
+    limit: 10,
+    ...initialParams
+  });
+
+  const loadNotifications = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetchNotifications(params);
+      
+      if (response.success) {
+        setNotifications(response.data.notifications);
+        setPagination(response.data.pagination);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to load notifications');
+    } finally {
+      setLoading(false);
+    }
+  }, [params]);
 
   useEffect(() => {
-    const load = async () => {
-      const data = await fetchNotifications();
-      setNotifications(data.notifications ?? []);
-    };
+    loadNotifications();
+  }, [loadNotifications]);
 
-    load();
-  }, [notifications]);
+  const changePage = (newPage) => {
+    setParams(prev => ({ ...prev, page: newPage }));
+  };
 
-  const totalPages = 0;
+  const changeFilter = (filterType) => {
+    setParams(prev => ({
+      ...prev,
+      page: 1,
+      notification_type: filterType
+    }));
+  };
 
-  return { notifications, total, totalPages, loading: false, error: true };
+  const refresh = () => {
+    loadNotifications();
+  };
+
+  return {
+    notifications,
+    pagination,
+    loading,
+    error,
+    changePage,
+    changeFilter,
+    refresh,
+    currentFilter: params.notification_type
+  };
 }
