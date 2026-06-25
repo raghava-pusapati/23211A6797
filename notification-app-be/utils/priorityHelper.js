@@ -1,4 +1,3 @@
-// priority rankings
 const PRIORITY_MAP = {
   'Placement': 1,
   'Result': 2,
@@ -14,12 +13,10 @@ function sortByPriority(notifications) {
     const prioA = getPriority(a.Type);
     const prioB = getPriority(b.Type);
     
-    // sort by priority first
     if (prioA !== prioB) {
       return prioA - prioB;
     }
     
-    // then by timestamp (newest first)
     return new Date(b.Timestamp) - new Date(a.Timestamp);
   });
 }
@@ -29,8 +26,4 @@ function getTopPriority(notifications, limit = 10) {
   return sorted.slice(0, limit);
 }
 
-module.exports = {
-  getPriority,
-  sortByPriority,
-  getTopPriority
-};
+module.exports = { getPriority, sortByPriority, getTopPriority };

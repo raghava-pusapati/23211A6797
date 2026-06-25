@@ -1,13 +1,9 @@
-// Stage 6 - Priority Notifications
-// Fetches and sorts notifications by importance
-
 const axios = require('axios');
 
 const API_URL = 'http://4.224.186.213';
 const NOTIF_ENDPOINT = '/evaluation-service/notifications';
 const TOKEN = process.env.BEARER_TOKEN || '';
 
-// priority order: placement first, then result, then event
 const priorityOrder = {
   'Placement': 1,
   'Result': 2,
@@ -28,12 +24,9 @@ async function fetchNotifications() {
   }
 }
 
-// calculate priority score - lower is better
 function getPriorityScore(notif) {
   const typeScore = priorityOrder[notif.Type] || 999;
   const time = new Date(notif.Timestamp).getTime();
-  
-  // multiply by large number so type takes precedence, then subtract time for recency
   return typeScore * 1000000000000 - time;
 }
 

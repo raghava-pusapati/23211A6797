@@ -1,7 +1,6 @@
 const { Log } = require('../../logging-middleware');
 
 function errorHandler(err, req, res, next) {
-  // log error
   Log('backend', 'error', 'middleware', `Unhandled error: ${err.message}`);
 
   const statusCode = err.statusCode || 500;
