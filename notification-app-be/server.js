@@ -7,7 +7,6 @@ const { Log, configure } = require('../logging-middleware');
 
 const app = express();
 
-// Configure logging middleware
 configure({
   loggingServerUrl: config.affordmedApi.baseUrl,
   bearerToken: config.auth.bearerToken,
