@@ -1,129 +1,86 @@
-/**
- * Stage 6: Priority Notification Fetcher
- * 
- * This script fetches notifications from AffordMed API and displays
- * the top N priority notifications based on type weighting:
- * - Placement (highest priority)
- * - Result (medium priority)
- * - Event (lowest priority)
- * 
- * Within each type, notifications are sorted by recency (newest first)
- */
+// Stage 6 - Priority Notifications
+// Fetches and sorts notifications by importance
 
 const axios = require('axios');
 
-// Configuration
-const API_BASE_URL = 'http://4.224.186.213';
-const NOTIFICATIONS_ENDPOINT = '/evaluation-service/notifications';
-const BEARER_TOKEN = process.env.BEARER_TOKEN || '';
+const API_URL = 'http://4.224.186.213';
+const NOTIF_ENDPOINT = '/evaluation-service/notifications';
+const TOKEN = process.env.BEARER_TOKEN || '';
 
-// Priority weights
-const PRIORITY_WEIGHTS = {
+// priority order: placement first, then result, then event
+const priorityOrder = {
   'Placement': 1,
   'Result': 2,
   'Event': 3
 };
 
-/**
- * Fetch notifications from AffordMed API
- */
 async function fetchNotifications() {
   try {
-    const url = `${API_BASE_URL}${NOTIFICATIONS_ENDPOINT}`;
-    const response = await axios.get(url, {
-      headers: {
-        'Authorization': `Bearer ${BEARER_TOKEN}`
-      },
+    const response = await axios.get(`${API_URL}${NOTIF_ENDPOINT}`, {
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
       timeout: 10000
     });
 
-    if (response.data && response.data.notifications) {
-      return response.data.notifications;
-    }
-
-    return [];
-  } catch (error) {
-    console.error('Error fetching notifications:', error.message);
-    throw error;
+    return response.data && response.data.notifications ? response.data.notifications : [];
+  } catch (err) {
+    console.error('Failed to fetch:', err.message);
+    throw err;
   }
 }
 
-/**
- * Calculate priority score for a notification
- * Lower score = higher priority
- */
-function calculatePriority(notification) {
-  const typeWeight = PRIORITY_WEIGHTS[notification.Type] || 999;
-  const timestamp = new Date(notification.Timestamp).getTime();
+// calculate priority score - lower is better
+function getPriorityScore(notif) {
+  const typeScore = priorityOrder[notif.Type] || 999;
+  const time = new Date(notif.Timestamp).getTime();
   
-  // Combine type priority with recency
-  // Newer notifications get slightly higher priority within same type
-  return typeWeight * 1000000000000 - timestamp;
+  // multiply by large number so type takes precedence, then subtract time for recency
+  return typeScore * 1000000000000 - time;
 }
 
-/**
- * Sort notifications by priority
- */
-function sortByPriority(notifications) {
-  return notifications.sort((a, b) => {
-    return calculatePriority(a) - calculatePriority(b);
-  });
+function sortByPriority(notifs) {
+  return notifs.sort((a, b) => getPriorityScore(a) - getPriorityScore(b));
 }
 
-/**
- * Get top N priority notifications
- */
-function getTopPriority(notifications, limit = 10) {
-  const sorted = sortByPriority([...notifications]);
-  return sorted.slice(0, limit);
+function getTopPriority(notifs, n = 10) {
+  const sorted = sortByPriority([...notifs]);
+  return sorted.slice(0, n);
 }
 
-/**
- * Format and display notifications
- */
-function displayNotifications(notifications) {
-  console.log('\n='.repeat(60));
+function displayNotifs(notifs) {
+  console.log('\n' + '='.repeat(60));
   console.log('Top Priority Notifications');
   console.log('='.repeat(60));
   
-  notifications.forEach((notif, index) => {
-    console.log(`\n${index + 1}. [${notif.Type}] ${notif.Message}`);
-    console.log(`   ID: ${notif.ID}`);
-    console.log(`   Time: ${new Date(notif.Timestamp).toLocaleString()}`);
+  notifs.forEach((n, i) => {
+    console.log(`\n${i + 1}. [${n.Type}] ${n.Message}`);
+    console.log(`   ID: ${n.ID}`);
+    console.log(`   Time: ${new Date(n.Timestamp).toLocaleString()}`);
   });
   
   console.log('\n' + '='.repeat(60));
-  console.log(`Total: ${notifications.length} notifications`);
+  console.log(`Total: ${notifs.length} notifications`);
   console.log('='.repeat(60) + '\n');
 }
 
-/**
- * Main execution
- */
 async function main() {
   try {
     const limit = parseInt(process.argv[2]) || 10;
     
     console.log('Fetching notifications...');
-    const notifications = await fetchNotifications();
-    console.log(`Fetched ${notifications.length} notifications`);
+    const allNotifs = await fetchNotifications();
+    console.log(`Got ${allNotifs.length} notifications from API`);
     
-    const topNotifications = getTopPriority(notifications, limit);
-    displayNotifications(topNotifications);
+    const topNotifs = getTopPriority(allNotifs, limit);
+    displayNotifs(topNotifs);
     
-  } catch (error) {
-    console.error('Failed to fetch and display notifications:', error.message);
+  } catch (err) {
+    console.error('Something went wrong:', err.message);
     process.exit(1);
   }
 }
 
-// Run if called directly
 if (require.main === module) {
   main();
 }
 
-module.exports = {
-  fetchNotifications,
-  sortByPriority,
-  getTopPriority
-};
+module.exports = { fetchNotifications, sortByPriority, getTopPriority };
